@@ -11,6 +11,26 @@ warn() { echo -e "${YELLOW}!${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*" >&2; }
 die()  { err "$*"; exit 1; }
 
+banner() {
+    echo ""
+    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                cmptools                ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+STEP_NUM=0
+STEP_TOTAL=0
+step_init() { STEP_TOTAL="$1"; STEP_NUM=0; }
+
+step() {
+    STEP_NUM=$((STEP_NUM + 1))
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Step ${STEP_NUM}/${STEP_TOTAL}: $*${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
 normalize_bus_id() {
     local raw="$1"
     raw="$(echo "${raw}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
