@@ -42,3 +42,34 @@ normalize_bus_id() {
         echo "${raw}"
     fi
 }
+
+profile_from_devid() {
+    case "$1" in
+        20c2) echo "8gb" ;;
+        2082) echo "10gb" ;;
+        *) echo "unsupported" ;;
+    esac
+}
+
+expected_mib_for_profile() {
+    case "$1" in
+        8gb) echo "65536" ;;
+        10gb) echo "40960" ;;
+        *) echo "" ;;
+    esac
+}
+
+smi_memory_for_bus() {
+    local want="$1"
+    local line bus mem
+    [[ -n "${SMI_MEM_CACHE:-}" ]] || return 0
+    while IFS= read -r line; do
+        [[ -n "${line}" ]] || continue
+        bus="$(normalize_bus_id "$(echo "${line}" | cut -d, -f1)")"
+        mem="$(echo "${line}" | cut -d, -f2 | tr -d '[:space:]')"
+        if [[ "${bus}" == "${want}" ]]; then
+            echo "${mem}"
+            return 0
+        fi
+    done <<< "${SMI_MEM_CACHE}"
+}
