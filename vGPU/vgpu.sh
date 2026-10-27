@@ -9,21 +9,44 @@ usage() {
     cat <<'EOF'
 Manage NVIDIA vGPU (SR-IOV host) on the CMP 170HX / GA100.
 
-Usage: sudo ./tools.sh vGPU <command> [args]
+Usage: sudo ./tools.sh vGPU <command> [BDF]
 
   install <pkg.run>     install the vGPU manager userspace and services from an
                         NVIDIA-Linux-x86_64-<ver>-vgpu-kvm.run package
-  enable  <BDF>         run this card in SR-IOV host mode from the next nvidia load
-  unhide  <BDF>         expose SR-IOV, MSI-X and a 4 GB BAR1 on this card (once per boot)
-  start   <BDF> [VFs]   create VFs (default 4) and start the vGPU services
-  stop    <BDF>         stop the services and remove the VFs; power off the VMs first
+  enable  [BDF]         run in SR-IOV host mode from the next nvidia load
+  unhide  [BDF]         expose SR-IOV, MSI-X and a 4 GB BAR1 (once per boot)
+  start   [BDF] [VFs]   create VFs (default 4) and start the vGPU services
+  stop    [BDF]         stop the services and remove the VFs; power off the VMs first
+
+With no BDF a command applies to every CMP 170HX in the system; pass a BDF
+(e.g. 0000:81:00.0) to restrict it to one card.
 
 Typical first-time flow:
   sudo ./tools.sh vGPU install NVIDIA-Linux-x86_64-<ver>-vgpu-kvm.run
-  sudo ./tools.sh vGPU enable 0000:81:00.0    # then reboot
-  sudo ./tools.sh vGPU unhide 0000:81:00.0    # once per boot
-  sudo ./tools.sh vGPU start  0000:81:00.0
+  sudo ./tools.sh vGPU enable     # then reboot
+  sudo ./tools.sh vGPU unhide     # once per boot
+  sudo ./tools.sh vGPU start
 EOF
+}
+
+is_cmp() {
+    local dev
+    dev="$(cat "/sys/bus/pci/devices/$1/device" 2>/dev/null || true)"
+    [[ "${dev}" == "0x20c2" || "${dev}" == "0x2082" ]]
+}
+
+resolve_targets() {
+    local arg="${1:-}" bdf all
+    if [[ -n "${arg}" ]]; then
+        bdf="$(normalize_bus_id "${arg}")"
+        [[ -e "/sys/bus/pci/devices/${bdf}" ]] || die "${bdf} not present"
+        is_cmp "${bdf}" || die "${bdf} is not a CMP 170HX"
+        echo "${bdf}"
+    else
+        all="$(cmp_gpus)"
+        [[ -n "${all}" ]] || die "no CMP 170HX found"
+        echo "${all}"
+    fi
 }
 
 do_install() {
@@ -173,10 +196,35 @@ case "${cmd}" in
 esac
 [[ "${EUID}" -eq 0 ]] || die "run as root"
 case "${cmd}" in
-    install) [[ $# -eq 1 ]] || { usage; exit 1; }; do_install "$1" ;;
-    enable)  [[ $# -eq 1 ]] || { usage; exit 1; }; do_enable "$1" ;;
-    unhide)  [[ $# -eq 1 ]] || { usage; exit 1; }; do_unhide "$1" ;;
-    start)   [[ $# -ge 1 ]] || { usage; exit 1; }; do_start "$1" "${2:-4}" ;;
-    stop)    [[ $# -eq 1 ]] || { usage; exit 1; }; do_stop "$1" ;;
+    install)
+        [[ $# -eq 1 ]] || { usage; exit 1; }
+        do_install "$1"
+        ;;
+    enable|unhide|stop)
+        [[ $# -le 1 ]] || { usage; exit 1; }
+        targets="$(resolve_targets "${1:-}")" || exit 1
+        while read -r bdf; do
+            [[ -n "${bdf}" ]] || continue
+            "do_${cmd}" "${bdf}"
+        done <<< "${targets}"
+        ;;
+    start)
+        start_bdf=""
+        start_count=4
+        for arg in "$@"; do
+            if [[ "${arg}" == *:* ]]; then
+                start_bdf="${arg}"
+            elif [[ "${arg}" =~ ^[0-9]+$ ]]; then
+                start_count="${arg}"
+            else
+                usage; exit 1
+            fi
+        done
+        targets="$(resolve_targets "${start_bdf}")" || exit 1
+        while read -r bdf; do
+            [[ -n "${bdf}" ]] || continue
+            do_start "${bdf}" "${start_count}"
+        done <<< "${targets}"
+        ;;
     *) usage; exit 1 ;;
 esac

@@ -59,6 +59,13 @@ expected_mib_for_profile() {
     esac
 }
 
+cmp_gpus() {
+    local id
+    for id in 20c2 2082; do
+        lspci -D -d "10de:${id}" 2>/dev/null | awk '{print $1}'
+    done
+}
+
 smi_memory_for_bus() {
     local want="$1"
     local line bus mem
