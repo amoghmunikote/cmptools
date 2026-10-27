@@ -14,7 +14,7 @@ Usage: sudo ./tools.sh vGPU <command> [BDF]
   install <pkg.run>     install the vGPU manager userspace and services from an
                         NVIDIA-Linux-x86_64-<ver>-vgpu-kvm.run package
   enable  [BDF]         run in SR-IOV host mode from the next nvidia load
-  unhide  [BDF]         expose SR-IOV, MSI-X and a 4 GB BAR1 (once per boot)
+  unhide  [BDF]         expose SR-IOV, MSI-X and a 64 GB BAR1 (once per boot)
   start   [BDF] [VFs]   create VFs (default 4) and start the vGPU services
   stop    [BDF]         stop the services and remove the VFs; power off the VMs first
 
@@ -144,7 +144,7 @@ do_unhide() {
     ecam write "${gpu}" 724 00000030 >/dev/null
     ecam write "${gpu}" dcc 8000000a >/dev/null
     v="$(ecam read "${gpu}" bc0)"
-    ecam write "${gpu}" bc0 "$(printf %08x $(( (v & ~0x3f00) | (12 << 8) )))" >/dev/null
+    ecam write "${gpu}" bc0 "$(printf %08x $(( (v & ~0x3f00) | (16 << 8) )))" >/dev/null
     echo 1 > /sys/bus/pci/rescan
     sleep 8
     echo 1 > /sys/bus/pci/drivers_autoprobe
